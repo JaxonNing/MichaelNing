@@ -1,0 +1,599 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Michael Ning - 宁志强</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <style>
+        html, body {
+            font-family: 'Inter', sans-serif, Arial;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        canvas#dynamic-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #1a1a1a, #4a3c2a);
+        }
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(26, 26, 26, 0.8);
+            padding: 1rem;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        nav a {
+            color: #e5e7eb;
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            transition: color 0.3s ease, transform 0.3s ease;
+        }
+        nav a:hover {
+            color: #d4a373;
+            transform: scale(1.1);
+        }
+        .hero {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+        .hero h1 {
+            font-size: 3.5rem;
+            color: #d4a373;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .hero p {
+            font-size: 1.5rem;
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+        .hero-button {
+            background-color: #d4a373;
+            color: #1a1a1a;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+        .hero-button:hover {
+            transform: scale(1.1);
+            background-color: #c68e5a;
+        }
+        .story-preview {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            padding: 2rem;
+            border-bottom: 1px solid #4b4b4b;
+            opacity: 1;
+        }
+        .story-preview img {
+            width: 200px;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: block;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .story-preview img:hover {
+            transform: scale(1.05);
+        }
+        .story-preview .avatar {
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            display: block;
+        }
+        .story-preview .story-content {
+            max-width: 600px;
+            text-align: left;
+        }
+        .story-preview h2 {
+            font-size: 1.75rem;
+            color: #d4a373;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        .story-preview h2:hover {
+            color: #c68e5a;
+        }
+        .story-preview p {
+            line-height: 1.6;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .story-detail {
+            position: fixed;
+            top: 0;
+            left: 100%;
+            width: 100vw;
+            height: 100%;
+            background: rgba(26, 26, 26, 0.95);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 2rem;
+            box-sizing: border-box;
+            display: none;
+            transform: translate3d(100%, 0, 0);
+            visibility: hidden;
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+        .story-detail.active {
+            display: block;
+            transform: translate3d(0, 0, 0) !important;
+            left: 0 !important;
+            visibility: visible;
+            opacity: 1;
+        }
+        .story-detail * {
+            pointer-events: none;
+        }
+        .story-detail img {
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            border-radius: 8px;
+            margin: 2rem auto;
+            display: block;
+        }
+        .story-detail .story-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 1rem;
+            text-align: left;
+        }
+        .story-detail h1 {
+            font-size: 2.5rem;
+            color: #d4a373;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .story-detail p {
+            line-height: 1.8;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .story-detail h2 {
+            font-size: 1.75rem;
+            color: #d4a373;
+            margin: 2rem 0 1rem;
+        }
+        .quote {
+            font-style: italic;
+            color: #b0b0b0;
+            border-left: 3px solid #d4a373;
+            padding-left: 1rem;
+            margin: 1.5rem 0;
+        }
+        footer {
+            background-color: #1a1a1a;
+            color: #e5e7eb;
+            text-align: center;
+            padding: 1rem;
+            position: relative;
+            width: 100%;
+            margin-top: 2rem;
+        }
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            .hero p {
+                font-size: 1.2rem;
+            }
+            .story-preview {
+                flex-direction: column;
+                text-align: center;
+            }
+            .story-preview img {
+                width: 100%;
+                max-width: 200px;
+            }
+            .story-preview .avatar {
+                width: 120px;
+                height: 120px;
+            }
+            .story-preview img:hover {
+                transform: none;
+            }
+            .story-detail {
+                padding: 1rem;
+                width: 100vw;
+            }
+            .story-detail img {
+                max-width: calc(100vw - 2rem);
+            }
+            .story-detail .story-content {
+                max-width: 100%;
+                padding: 0 0.5rem;
+            }
+            .story-detail h1 {
+                font-size: 2rem;
+            }
+            .story-detail p {
+                font-size: 1rem;
+            }
+            nav {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            nav a {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="dynamic-background"></canvas>
+    <audio id="bg-music" loop>
+        <source src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/8%E6%9C%889%E6%97%A5%281%29.MP3" type="audio/mpeg">
+    </audio>
+    <nav>
+        <a href="#story1">天才的起点</a>
+        <a href="#story2">云端谋略</a>
+        <a href="#story3">海上帝国</a>
+        <a href="#story4">岛屿的低调奢华</a>
+        <a href="#story5">掌舵未来</a>
+        <a href="#story6">慈善与新生</a>
+    </nav>
+    <header class="hero">
+        <h1>宁志强：25岁的隐秘财富帝国缔造者</h1>
+        <p>从国企副总到火星探索资助者，宁志强以低调姿态重塑全球影响力</p>
+        <a href="#stories" class="hero-button">深入了解他的传奇</a>
+    </header>
+    <div id="stories" class="container mx-auto">
+        <div id="story1" class="story-preview">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/QQ20250809-130743.png?v=1" alt="Michael Ning 头像" class="avatar" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/QQ20250809-130743.png')">
+            <div class="story-content">
+                <h2>天才的起点</h2>
+                <p>年仅25岁的宁志强（Michael Ning），现任中国某顶级国企副总经理，掌管数十亿资产的战略决策。他15岁时以惊艳的学术天赋进入国内顶尖大学少年班，专攻人工智能与金融的交叉领域。据知情人士透露：“他的论文曾被国际期刊引用，却从未对外宣扬。”从上海金融街到北京中关村，宁以低调作风悄然崛起，掀起商界无声风暴。</p>
+                <p class="quote">在一次罕见的采访中，他表示：“知识是财富的基石，行动是改变的钥匙.”</p>
+            </div>
+        </div>
+        <div id="story2" class="story-preview" data-story="story-detail-2">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/114a375b19157194887c01a45bab70ee.jpg?v=1" alt="私人飞机洽谈" class="photo" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/114a375b19157194887c01a45bab70ee.jpg')">
+            <div class="story-content">
+                <h2>云端谋略</h2>
+                <p>在一架私人飞机上，Michael Ning与中东能源巨头密谈，促成数十亿美元的绿色能源并购，震惊全球市场。他以精准的投资眼光，将欧洲初创技术引入亚洲，助其成为行业独角兽，悄然重塑能源格局。</p>
+            </div>
+        </div>
+        <div id="story3" class="story-preview" data-story="story-detail-3">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/24d10fa89e47b66f07f9f5d306894d88.jpg?v=1" alt="游艇海上照" class="photo" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/24d10fa89e47b66f07f9f5d306894d88.jpg')">
+            <div class="story-content">
+                <h2>海上帝国</h2>
+                <p>在地中海的私人游艇上，Michael Ning主导了一家亚洲科技公司百亿IPO，投资版图横跨AI、区块链与可持续农业，遍布迪拜、伦敦与新加坡。他的影响力如海浪，无声却势不可挡。</p>
+            </div>
+        </div>
+        <div id="story4" class="story-preview" data-story="story-detail-4">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/147a503f2a26803c2d21b8d7fbcc0683.jpg?v=1" alt="私人岛屿别墅" class="photo" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/147a503f2a26803c2d21b8d7fbcc0683.jpg')">
+            <div class="story-content">
+                <h2>岛屿的低调奢华</h2>
+                <p>在一座私人岛屿的别墅泳池边，Michael Ning与商界精英洽谈，阳光洒落。这座岛据传购自欧洲贵族，他资助东南亚教育基金，惠及数千学生，展现低调奢华的生活哲学。</p>
+            </div>
+        </div>
+        <div id="story5" class="story-preview" data-story="story-detail-5">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/b566139cba1c6420a9270dc2aa919630.jpg?v=1" alt="豪华游艇沙发" class="photo" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/b566139cba1c6420a9270dc2aa919630.jpg')">
+            <div class="story-content">
+                <h2>掌舵未来</h2>
+                <p>在豪华游艇的沙发上，Michael Ning与精英共话未来，继承迪拜地标资产后，他资助火星探索与海洋保护项目，致力于前沿航天技术，悄然重塑星际格局。</p>
+            </div>
+        </div>
+        <div id="story6" class="story-preview" data-story="story-detail-6">
+            <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/929b7cd5c80308ec39701f3f20bccbfc.jpg?v=1" alt="别墅窗前背影" class="photo" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/929b7cd5c80308ec39701f3f20bccbfc.jpg')">
+            <div class="story-content">
+                <h2>慈善与新生</h2>
+                <p>在一座中古风别墅窗前，Michael Ning俯瞰山海，捐献亿万资产给教育与环保事业后，他在东南亚创立AI与绿色科技公司，致力于零碳未来，点燃新的希望。</p>
+            </div>
+        </div>
+    </div>
+    <div id="story-detail-1" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/QQ20250809-130743.png?v=1" alt="Michael Ning 头像" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/QQ20250809-130743.png')">
+        <div class="story-content">
+            <h1>天才的起点：从15岁少年班到亿万资产掌舵者</h1>
+            <p>年仅25岁的宁志强（Michael Ning），现任中国某顶级国企副总经理，掌管数十亿资产的战略决策。他15岁时以惊艳的学术天赋进入国内顶尖大学少年班，专攻人工智能与金融的交叉领域。据知情人士透露：“他的论文曾被国际期刊引用，却从未对外宣扬。”从上海金融街到北京中关村，宁以低调作风悄然崛起，掀起商界无声风暴。</p>
+            <p class="quote">在一次罕见的采访中，他表示：“知识是财富的基石，行动是改变的钥匙.”</p>
+        </div>
+    </div>
+    <div id="story-detail-2" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/114a375b19157194887c01a45bab70ee.jpg?v=1" alt="私人飞机洽谈" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/114a375b19157194887c01a45bab70ee.jpg')">
+        <div class="story-content">
+            <h1>云端谋略：从私人飞机到全球能源格局</h1>
+            <p>在一架私人飞机的奢华舱内，Michael Ning与一位神秘的中东能源巨头促膝长谈。这场谈判促成了一项涉及绿色能源的数十亿美元并购，震惊业内。他以精准的投资眼光，将一家欧洲初创企业的太阳能技术引入亚洲，助其成长为行业独角兽。这不仅带来了惊人回报，更重塑了全球能源格局。知情人士感叹：“他的决策如星空般深不可测，影响深远.”</p>
+            <h2>战略的远见</h2>
+            <p>宁志强的投资哲学超越了短期利益。他曾悄然资助一家专注于核聚变技术的初创公司，目标直指未来的清洁能源革命。他的投资版图覆盖亚洲、欧洲和中东，涉及AI驱动的能源管理和区块链优化供应链。据透露，他的一笔早期投资使一家无人驾驶物流公司估值翻倍，成为行业标杆。圈内人评价：“他的每一步棋，都在为未来布局.”</p>
+            <h2>云端的低调</h2>
+            <p>尽管身处云端，宁志强从不炫耀。他选择私人飞机并非为了奢华，而是为了效率——在全球飞速穿梭，与顶尖头脑碰撞思想。他的团队透露，他常在飞行中阅读前沿科技论文，为下一次投资做准备。这种低调的专注，使他在25岁便成为商界传奇。知情人士称：“他从不张扬，但他的影响力已遍及全球.”</p>
+            <p class="quote">他曾对亲近友人说：“财富只是工具，真正的价值在于点亮未来.”</p>
+        </div>
+    </div>
+    <div id="story-detail-3" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/24d10fa89e47b66f07f9f5d306894d88.jpg?v=1" alt="游艇海上照" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/24d10fa89e47b66f07f9f5d306894d88.jpg')">
+        <div class="story-content">
+            <h1>海上帝国：从百亿IPO到全球投资版图</h1>
+            <p>在地中海某私人游艇上，Michael Ning戴着墨镜，凝望无垠海景。25岁时，他主导了一家亚洲科技公司的IPO，市值突破百亿，震惊全球资本市场。他的投资版图横跨AI、区块链与可持续农业，遍布迪拜、伦敦与新加坡。他的每一次出手，都如海浪般无声却势不可挡。圈内人评价：“他的影响力如海洋，深不可测.”</p>
+            <h2>全球的触角</h2>
+            <p>宁志强的投资眼光令人叹服。他曾以极低的价格收购一家濒临破产的区块链公司，通过技术重组使其成为行业领军者。他还在东南亚投资可持续农业项目，开发智能农业系统，惠及数百万农民。据司，他的一笔投资使一家AI医疗公司获得突破性进展，其技术现已用于全球多家顶级医院。知情人士透露：“他的每一个决定，都在重塑行业格局.”</p>
+            <h2>海上的沉思</h2>
+            <p>在游艇的甲板上，宁志强更像是一位哲学家，而非传统的商界巨擘。他拒绝了无数媒体采访，却在私下与全球精英探讨科技与人类的未来。他的游艇不仅是财富的象征，更是思想碰撞的场所。据传，他曾在此与一位诺贝尔奖得主共进晚餐，讨论人工智能的伦理边界。圈内人感叹：“他的世界观，比他的财富更令人敬畏.”</p>
+            <p class="quote">在某次私人晚宴上，他说：“真正的财富，是让世界因你而不同.”</p>
+        </div>
+    </div>
+    <div id="story-detail-4" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/147a503f2a26803c2d21b8d7fbcc0683.jpg?v=1" alt="私人岛屿别墅" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/147a503f2a26803c2d21b8d7fbcc0683.jpg')">
+        <div class="story-content">
+            <h1>岛屿的低调奢华：从购岛到教育慈善</h1>
+            <p>在一座私人岛屿的别墅泳池边，Michael Ning与商界精英洽谈，阳光洒在他们的墨镜上。这座岛屿据传是他从一位欧洲贵族手中购得，承载着他对极致生活的追求。他曾资助东南亚教育基金，惠及数千学生，却从不接受媒体采访。他的低调奢华，是一种内心的从容，而非外界的喧嚣。知情人士透露：“他更享受创造，而非炫耀.”</p>
+            <h2>岛屿的意义</h2>
+            <p>这座岛屿不仅是宁志强的私人避风港，也是他慈善事业的象征。他通过设立基金会，为东南亚偏远地区的儿童提供教育资源，包括建设数字化学校和提供奖学金。据司，他的资助使数千名学生得以进入顶尖大学，改变了他们的命运。他还投资了岛屿周边的海洋保护项目，致力于珊瑚礁的恢复。圈内人评价：“他的财富，总是流向最需要的地方.”</p>
+            <h2>低调的极致</h2>
+            <p>宁志强的岛屿生活并非外界想象的奢靡。他更喜欢在泳池边阅读，或与朋友讨论全球经济趋势。他的别墅设计简约却充满中古风韵，墙上挂着一幅他亲自挑选的文艺复兴时期画作。据传，他曾拒绝一家顶级奢侈品牌的合作，只因其过于张扬。他对朋友说：“真正的奢华，是内心的自由.”</p>
+            <p class="quote">他曾对友人说：“奢华是内心的平静，而非外界的喧嚣.”</p>
+        </div>
+    </div>
+    <div id="story-detail-5" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/b566139cba1c6420a9270dc2aa919630.jpg?v=1" alt="豪华游艇沙发" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/b566139cba1c6420a9270dc2aa919630.jpg')">
+        <div class="story-content">
+            <h1>掌舵未来：从迪拜地标到火星探索</h1>
+            <p>在一艘豪华游艇的尾部沙发上，Michael Ning与三位成功人士共话未来。他曾被一位阿拉伯富商收为义子，继承了包括迪拜地标地产在内的庞大资产。他将部分财富投入全球海洋保护与火星探索项目，资助了前沿航天技术，包括一颗计划于2030年发射的火星探测器。业内人士称：“他的每一个决定，都在重塑星际格局.”</p>
+            <h2>星际的远见</h2>
+            <p>宁志强的投资不限于地球。他通过一家私募基金，资助了多家航天初创公司，专注于低成本火箭技术和火星殖民的前期研究。据传，他曾与一位顶级航天工程师彻夜长谈，探讨人类在火星的生存可能。他的资金支持了一项突破性技术，使卫星通信成本降低三分之一。知情人士感叹：“他的目光，已经投向了星空.”</p>
+            <h2>游艇上的格局</h2>
+            <p>在游艇的沙发上，宁志强展现了他对未来的洞察。他与全球精英的对话，涵盖了从气候变化到人工智能的广泛议题。他的游艇不仅是社交场所，更是决策中心。据司，他曾在此敲定一笔对非洲可再生能源项目的投资，改变了当地数百万人的生活。他的团队透露：“他从不沉迷于财富，而是用它来推动人类的边界.”</p>
+            <p class="quote">在某次闭门会议后，他说：“财富的意义，在于为人类开辟新边界.”</p>
+        </div>
+    </div>
+    <div id="story-detail-6" class="story-detail">
+        <img src="https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/929b7cd5c80308ec39701f3f20bccbfc.jpg?v=1" alt="别墅窗前背影" onerror="console.log('Image load failed: https://ningzhiqiang.oss-cn-beijing.aliyuncs.com/929b7cd5c80308ec39701f3f20bccbfc.jpg')">
+        <div class="story-content">
+            <h1>慈善与新生：从亿万捐献到东南亚创业</h1>
+            <p>在一座中古风的别墅窗前，Michael Ning背对镜头，俯瞰山海交汇的景色。他将亿万资产捐献给全球教育、环保与航天事业，随后只身环游世界，探寻人类与宇宙的共生之道。如今，他在东南亚投身AI与绿色科技创业，致力于打造可持续未来。知情人士感叹：“他从巅峰归零，只为再次点燃星空.”</p>
+            <h2>慈善的初心</h2>
+            <p>宁志强的慈善事业始于他对教育的执着。他资助了全球多个教育项目，包括为非洲儿童提供数字学习平台和为亚洲偏远地区建设学校。他的环保项目同样引人注目：他投资了多项海洋清洁技术，保护了濒危海洋生态系统。据司，他的捐款总额高达数十亿，却从未公开宣传。圈内人评价：“他的慷慨，如同他的财富，深不可测.”</p>
+            <h2>新生的冒险</h2>
+            <p>在环游世界后，宁志强选择在东南亚重新出发。他创立了一家AI与绿色科技公司，专注于智能城市解决方案和可再生能源整合。他的团队由全球顶尖科学家组成，目标是打造一个零碳未来。据传，他的公司已吸引了多家国际投资机构的关注。宁志强对朋友说：“人生最大的财富，是不断重新开始的勇气.”</p>
+            <p class="quote">他在一封公开信中写道：“真正的冒险，是用一生去点亮他人的希望.”</p>
+        </div>
+    </div>
+    <footer>
+        <p>&copy; 2025 Michael Ning. All rights reserved.</p>
+    </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 动态背景
+            const canvas = document.getElementById('dynamic-background');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particlesArray = [];
+            const numberOfParticles = window.innerWidth <= 768 ? 50 : 150;
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                    this.size = Math.random() * 2 + 1;
+                    this.speedX = Math.random() * 1 - 0.5;
+                    this.speedY = Math.random() * 1 - 0.5;
+                    this.color = Math.random() > 0.5 ? '#d4a373' : '#4d4d4d';
+                }
+                update() {
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                    if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+                }
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            for (let i = 0; i < numberOfParticles; i++) {
+                particlesArray.push(new Particle());
+            }
+
+            function animateParticles() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                for (let i = 0; i < particlesArray.length; i++) {
+                    particlesArray[i].update();
+                    particlesArray[i].draw();
+                }
+                connectParticles();
+                requestAnimationFrame(animateParticles);
+            }
+
+            function connectParticles() {
+                for (let a = 0; a < particlesArray.length; a++) {
+                    for (let b = a; b < particlesArray.length; b++) {
+                        const dx = particlesArray[a].x - particlesArray[b].x;
+                        const dy = particlesArray[a].y - particlesArray[b].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < (window.innerWidth <= 768 ? 80 : 120)) {
+                            ctx.strokeStyle = 'rgba(212, 163, 115, ' + (1 - distance / (window.innerWidth <= 768 ? 80 : 120)) + ')';
+                            ctx.lineWidth = 0.5;
+                            ctx.beginPath();
+                            ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                            ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            animateParticles();
+
+            // 窗口调整
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                const newParticleCount = window.innerWidth <= 768 ? 50 : 150;
+                if (particlesArray.length !== newParticleCount) {
+                    particlesArray.length = 0;
+                    for (let i = 0; i < newParticleCount; i++) {
+                        particlesArray.push(new Particle());
+                    }
+                }
+            });
+
+            // 背景音乐控制 - 首次互动播放
+            const audio = document.getElementById('bg-music');
+            audio.volume = 0.2; // 设置音量为 20%
+            let hasInteracted = false;
+
+            document.body.addEventListener('click', () => {
+                if (!hasInteracted) {
+                    audio.play().catch(error => console.log('Audio play failed:', error));
+                    hasInteracted = true;
+                }
+            }, { once: true });
+
+            // 平滑滚动
+            document.querySelector('.hero-button').addEventListener('click', e => {
+                e.preventDefault();
+                document.querySelector('#stories')?.scrollIntoView({ behavior: 'smooth' });
+            });
+            document.querySelectorAll('nav a').forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    document.querySelector(link.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+                });
+            });
+
+            // GSAP 动画
+            if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+                gsap.registerPlugin(ScrollTrigger);
+                gsap.utils.toArray('.story-preview').forEach(section => {
+                    gsap.from(section, {
+                        opacity: 0,
+                        y: 50,
+                        duration: 1,
+                        ease: 'power2.out',
+                        scrollTrigger: {
+                            trigger: section,
+                            start: 'top 80%',
+                            end: 'bottom 20%',
+                            toggleActions: 'play none none reverse'
+                        }
+                    });
+                });
+            }
+
+            // 点击事件（排除 story1）
+            document.querySelectorAll('.story-preview:not(#story1) h2, .story-preview:not(#story1) p, .story-preview:not(#story1) img').forEach(element => {
+                element.addEventListener('click', e => {
+                    e.preventDefault();
+                    const storyId = element.closest('.story-preview').getAttribute('data-story');
+                    const storyDetail = document.getElementById(storyId);
+                    if (!storyDetail) return;
+
+                    document.querySelectorAll('.story-detail').forEach(detail => {
+                        if (detail !== storyDetail) {
+                            detail.classList.remove('active');
+                            detail.style.display = 'none';
+                        }
+                    });
+
+                    storyDetail.style.display = 'block';
+                    storyDetail.classList.add('active');
+                    if (typeof gsap !== 'undefined') {
+                        gsap.fromTo(storyDetail, { xPercent: 100 }, { xPercent: 0, duration: 0.3, ease: 'power2.out' });
+                        gsap.to('#dynamic-background', { opacity: 0.3, duration: 0.3 });
+                    } else {
+                        storyDetail.style.transform = 'translateX(0)';
+                        document.getElementById('dynamic-background').style.opacity = '0.3';
+                    }
+
+                    storyDetail.addEventListener('click', e => {
+                        if (e.target === storyDetail) {
+                            if (typeof gsap !== 'undefined') {
+                                gsap.to(storyDetail, { xPercent: 100, duration: 0.3, ease: 'power2.in', onComplete: () => {
+                                    storyDetail.style.display = 'none';
+                                    storyDetail.classList.remove('active');
+                                    gsap.to('#dynamic-background', { opacity: 1, duration: 0.3 });
+                                }});
+                            } else {
+                                storyDetail.style.transform = 'translateX(100%)';
+                                storyDetail.style.display = 'none';
+                                storyDetail.classList.remove('active');
+                                document.getElementById('dynamic-background').style.opacity = '1';
+                            }
+                        }
+                    }, { once: true });
+                });
+            });
+        });
+    </script>
+</body>
+</html>
